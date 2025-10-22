@@ -3,7 +3,6 @@ import sys
 import random
 from PIL import Image
 
-# --- Initialize ---
 pygame.init()
 WIDTH, HEIGHT = 800, 400
 win = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -12,13 +11,12 @@ pygame.display.set_caption("Jungle Runner")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("arial", 24)
 
-# --- Game Variables ---
 gravity = 0.8
 game_speed = 6
 score = 0
-ground_height = 100  # Ground height
+ground_height = 100
 
-# --- Load GIF Frames using Pillow ---
+#Load gifs using pillow and convert to pygame surfaces
 def load_gif_frames(path):
     frames = []
     gif = Image.open(path)
@@ -40,12 +38,12 @@ current_frame = 0
 frame_delay = 5
 frame_counter = 0
 
-# --- Player ---
+#Player stuff
 player_rect = player_frames[0].get_rect(midbottom=(120, HEIGHT - ground_height))
 player_y_velocity = 0
 is_jumping = False
 
-# --- Gradient ground drawing ---
+#Makeshift ground segments
 segment_width = WIDTH
 def draw_gradient_ground(surface, x, y, width, height):
     top_color = (76, 187, 23)    # bright green
@@ -64,26 +62,25 @@ ground_segments = [
     {"x": segment_width, "y": HEIGHT - ground_height}
 ]
 
-# --- Obstacle setup ---
+# -------OBSTACLE SETUP-------
 obstacle_width, obstacle_height = 40, 60
 obstacle_x = WIDTH
 obstacle_y = HEIGHT - ground_height - obstacle_height
 
-# --- Airborne Red Blocks setup ---
+# -------AIRBORNE BLOCK SETUP-------
 airborne_blocks = []
 airborne_block_width, airborne_block_height = 40, 40
 airborne_min_y = HEIGHT - ground_height - 120
 airborne_max_y = HEIGHT - ground_height - 60
-airborne_spawn_interval = 150  # frames
+airborne_spawn_interval = 150  # frames between airborne block spawns
 airborne_counter = 0
-airborne_min_gap = 120         # minimum horizontal gap between airborne blocks
+airborne_min_gap = 150         # minimum horizontal gap between airborne blocks
 
-# --- Game Loop ---
+# --- Main Game Loop ---
 while True:
     clock.tick(60)
-    win.fill((135, 206, 235))  # sky blue background
+    win.fill((135, 206, 235))
 
-    # --- Input ---
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -93,7 +90,6 @@ while True:
                 is_jumping = True
                 player_y_velocity = -15
 
-    # --- Player physics ---
     if is_jumping:
         player_rect.y += player_y_velocity
         player_y_velocity += gravity
@@ -101,20 +97,20 @@ while True:
             player_rect.bottom = HEIGHT - ground_height
             is_jumping = False
 
-    # --- Animate Player ---
+
     frame_counter += 1
     if frame_counter >= frame_delay:
         current_frame = (current_frame + 1) % len(player_frames)
         frame_counter = 0
 
-    # --- Move obstacle ---
+
     obstacle_x -= game_speed
     if obstacle_x < -obstacle_width:
         obstacle_x = WIDTH + random.randint(300, 800)
         score += 1
         game_speed += 0.2
 
-    # --- Airborne Blocks Logic ---
+    #Airborne Blocks
     airborne_counter += 1
     if airborne_counter >= airborne_spawn_interval:
         last_x = airborne_blocks[-1][0] if airborne_blocks else -airborne_min_gap
@@ -128,26 +124,22 @@ while True:
         block[0] -= game_speed
     airborne_blocks = [block for block in airborne_blocks if block[0] > -airborne_block_width]
 
-    # --- Scroll ground segments ---
     for seg in ground_segments:
         seg["x"] -= game_speed
         if seg["x"] <= -segment_width:
             seg["x"] = max(gs["x"] for gs in ground_segments) + segment_width
 
-    # --- Draw ground segments ---
     for seg in ground_segments:
         draw_gradient_ground(win, seg["x"], seg["y"], segment_width, ground_height)
 
-    # --- Draw player ---
+
     win.blit(player_frames[current_frame], player_rect)
 
-    # --- Draw obstacle (ground) ---
     pygame.draw.rect(win, (34, 139, 34), (obstacle_x, obstacle_y, obstacle_width, obstacle_height))
-    # --- Draw red airborne blocks ---
     for ab in airborne_blocks:
         pygame.draw.rect(win, (220, 30, 30), (ab[0], ab[1], airborne_block_width, airborne_block_height))
 
-    # --- Collision ---
+    #Collision
     obstacle_rect = pygame.Rect(obstacle_x, obstacle_y, obstacle_width, obstacle_height)
     airborne_rects = [pygame.Rect(ab[0], ab[1], airborne_block_width, airborne_block_height) for ab in airborne_blocks]
 
@@ -164,7 +156,7 @@ while True:
         win.blit(text, (WIDTH//2 - 160, HEIGHT//2))
         pygame.display.update()
 
-        # Wait for restart
+        # Restart
         waiting = True
         while waiting:
             for event in pygame.event.get():
@@ -180,7 +172,7 @@ while True:
                     airborne_counter = 0
                     waiting = False
 
-    # --- Score ---
+    #Score
     score_text = font.render(f"Score: {score}", True, (0, 0, 0))
     win.blit(score_text, (10, 10))
 
