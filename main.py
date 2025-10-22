@@ -16,7 +16,7 @@ font = pygame.font.SysFont("arial", 24)
 gravity = 0.8
 game_speed = 6
 score = 0
-ground_height = 64
+ground_height = 100  # taller ground to cover bottom area
 
 # --- Load GIF Frames using Pillow ---
 def load_gif_frames(path):
@@ -40,20 +40,26 @@ current_frame = 0
 frame_delay = 5
 frame_counter = 0
 
-player_rect = player_frames[0].get_rect(midbottom=(100, HEIGHT - ground_height))
+player_rect = player_frames[0].get_rect(midbottom=(120, HEIGHT - ground_height + 15))
 player_y_velocity = 0
 is_jumping = False
 
-# --- Load jungle tileset ---
+# --- Load jungle tileset and build long scrolling ground ---
 tileset = pygame.image.load("jungle tileset.png").convert_alpha()
 
-# Choose one visible “ground-looking” section — adjust these numbers to your liking
-# (for example, (0, 96, 128, 32)) means: start x=0, y=96, width=128, height=32
-# you can tweak these if the selected area doesn’t look right
+# Pick one “ground-like” section
+# (try changing y=96 or y=64 depending on which tile looks like solid grass)
 ground_crop = tileset.subsurface((0, 96, 128, 32))
 
-# Stretch it to full width
-ground_surface = pygame.transform.scale(ground_crop, (WIDTH, ground_height))
+# Make a long wide ground segment
+segment_width = WIDTH
+ground_segment = pygame.transform.scale(ground_crop, (segment_width, ground_height))
+
+# Create two ground segments for looping
+ground_segments = [
+    {"x": 0, "y": HEIGHT - ground_height},
+    {"x": segment_width, "y": HEIGHT - ground_height}
+]
 
 # --- Obstacle setup ---
 obstacle_width, obstacle_height = 40, 60
@@ -63,7 +69,7 @@ obstacle_y = HEIGHT - ground_height - obstacle_height
 # --- Game Loop ---
 while True:
     clock.tick(60)
-    win.fill((135, 206, 235))  # sky blue
+    win.fill((135, 206, 235))  # sky blue background
 
     # --- Input ---
     for event in pygame.event.get():
@@ -79,8 +85,8 @@ while True:
     if is_jumping:
         player_rect.y += player_y_velocity
         player_y_velocity += gravity
-        if player_rect.bottom >= HEIGHT - ground_height:
-            player_rect.bottom = HEIGHT - ground_height
+        if player_rect.bottom >= HEIGHT - ground_height + 15:
+            player_rect.bottom = HEIGHT - ground_height + 15
             is_jumping = False
 
     # --- Animate Player ---
@@ -96,8 +102,16 @@ while True:
         score += 1
         game_speed += 0.2
 
-    # --- Draw ground (single large sprite) ---
-    win.blit(ground_surface, (0, HEIGHT - ground_height))
+    # --- Scroll ground segments ---
+    for seg in ground_segments:
+        seg["x"] -= game_speed
+        # when a segment fully scrolls off-screen, move it to the right of the other one
+        if seg["x"] + segment_width <= 0:
+            seg["x"] = max(gs["x"] for gs in ground_segments) + segment_width
+
+    # --- Draw ground segments ---
+    for seg in ground_segments:
+        win.blit(ground_segment, (seg["x"], seg["y"]))
 
     # --- Draw player ---
     win.blit(player_frames[current_frame], player_rect)
@@ -120,7 +134,7 @@ while True:
                     pygame.quit()
                     sys.exit()
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-                    player_rect.bottom = HEIGHT - ground_height
+                    player_rect.bottom = HEIGHT - ground_height + 15
                     obstacle_x = WIDTH
                     score = 0
                     game_speed = 6
