@@ -16,7 +16,7 @@ font = pygame.font.SysFont("arial", 24)
 gravity = 0.8
 game_speed = 6
 score = 0
-ground_height = 100  # taller ground to cover bottom area
+ground_height = 100  # Ground height
 
 # --- Load GIF Frames using Pillow ---
 def load_gif_frames(path):
@@ -40,22 +40,25 @@ current_frame = 0
 frame_delay = 5
 frame_counter = 0
 
-player_rect = player_frames[0].get_rect(midbottom=(120, HEIGHT - ground_height + 15))
+# --- Player ---
+player_rect = player_frames[0].get_rect(midbottom=(120, HEIGHT - ground_height))
 player_y_velocity = 0
 is_jumping = False
 
-# --- Load jungle tileset and build long scrolling ground ---
-tileset = pygame.image.load("jungle tileset.png").convert_alpha()
-
-# Pick one “ground-like” section
-# (try changing y=96 or y=64 depending on which tile looks like solid grass)
-ground_crop = tileset.subsurface((0, 96, 128, 32))
-
-# Make a long wide ground segment
+# --- Gradient ground drawing ---
 segment_width = WIDTH
-ground_segment = pygame.transform.scale(ground_crop, (segment_width, ground_height))
+def draw_gradient_ground(surface, x, y, width, height):
+    top_color = (76, 187, 23)    # bright green
+    mid_color = (166, 123, 75)   # medium brown
+    bottom_color = (90, 55, 37)  # dark brown
+    for i in range(height):
+        if i < height // 5:
+            color = [int(top_color[j] * (1 - i/(height//5)) + mid_color[j] * (i/(height//5))) for j in range(3)]
+        else:
+            ratio = (i - height // 5) / (height - height // 5)
+            color = [int(mid_color[j] * (1 - ratio) + bottom_color[j] * ratio) for j in range(3)]
+        pygame.draw.line(surface, color, (x, y + i), (x + width, y + i))
 
-# Create two ground segments for looping
 ground_segments = [
     {"x": 0, "y": HEIGHT - ground_height},
     {"x": segment_width, "y": HEIGHT - ground_height}
@@ -65,6 +68,15 @@ ground_segments = [
 obstacle_width, obstacle_height = 40, 60
 obstacle_x = WIDTH
 obstacle_y = HEIGHT - ground_height - obstacle_height
+
+# --- Airborne Red Blocks setup ---
+airborne_blocks = []
+airborne_block_width, airborne_block_height = 40, 40
+airborne_min_y = HEIGHT - ground_height - 120
+airborne_max_y = HEIGHT - ground_height - 60
+airborne_spawn_interval = 150  # frames
+airborne_counter = 0
+airborne_min_gap = 120         # minimum horizontal gap between airborne blocks
 
 # --- Game Loop ---
 while True:
@@ -85,8 +97,8 @@ while True:
     if is_jumping:
         player_rect.y += player_y_velocity
         player_y_velocity += gravity
-        if player_rect.bottom >= HEIGHT - ground_height + 15:
-            player_rect.bottom = HEIGHT - ground_height + 15
+        if player_rect.bottom >= HEIGHT - ground_height:
+            player_rect.bottom = HEIGHT - ground_height
             is_jumping = False
 
     # --- Animate Player ---
@@ -102,26 +114,52 @@ while True:
         score += 1
         game_speed += 0.2
 
+    # --- Airborne Blocks Logic ---
+    airborne_counter += 1
+    if airborne_counter >= airborne_spawn_interval:
+        last_x = airborne_blocks[-1][0] if airborne_blocks else -airborne_min_gap
+        x_pos = max(WIDTH + random.randint(0, 300), last_x + airborne_min_gap)
+        y_pos = random.randint(airborne_min_y, airborne_max_y)
+        airborne_blocks.append([x_pos, y_pos])
+        airborne_counter = 0
+
+    # Move airborne blocks and remove off-screen ones
+    for block in airborne_blocks:
+        block[0] -= game_speed
+    airborne_blocks = [block for block in airborne_blocks if block[0] > -airborne_block_width]
+
     # --- Scroll ground segments ---
     for seg in ground_segments:
         seg["x"] -= game_speed
-        # when a segment fully scrolls off-screen, move it to the right of the other one
-        if seg["x"] + segment_width <= 0:
+        if seg["x"] <= -segment_width:
             seg["x"] = max(gs["x"] for gs in ground_segments) + segment_width
 
     # --- Draw ground segments ---
     for seg in ground_segments:
-        win.blit(ground_segment, (seg["x"], seg["y"]))
+        draw_gradient_ground(win, seg["x"], seg["y"], segment_width, ground_height)
 
     # --- Draw player ---
     win.blit(player_frames[current_frame], player_rect)
 
-    # --- Draw obstacle ---
+    # --- Draw obstacle (ground) ---
     pygame.draw.rect(win, (34, 139, 34), (obstacle_x, obstacle_y, obstacle_width, obstacle_height))
+    # --- Draw red airborne blocks ---
+    for ab in airborne_blocks:
+        pygame.draw.rect(win, (220, 30, 30), (ab[0], ab[1], airborne_block_width, airborne_block_height))
 
     # --- Collision ---
     obstacle_rect = pygame.Rect(obstacle_x, obstacle_y, obstacle_width, obstacle_height)
+    airborne_rects = [pygame.Rect(ab[0], ab[1], airborne_block_width, airborne_block_height) for ab in airborne_blocks]
+
+    collision = False
     if player_rect.colliderect(obstacle_rect):
+        collision = True
+    for ab_rect in airborne_rects:
+        if player_rect.colliderect(ab_rect):
+            collision = True
+            break
+
+    if collision:
         text = font.render("Game Over! Press R to Restart", True, (0, 0, 0))
         win.blit(text, (WIDTH//2 - 160, HEIGHT//2))
         pygame.display.update()
@@ -134,10 +172,12 @@ while True:
                     pygame.quit()
                     sys.exit()
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
-                    player_rect.bottom = HEIGHT - ground_height + 15
+                    player_rect.bottom = HEIGHT - ground_height
                     obstacle_x = WIDTH
+                    airborne_blocks = []
                     score = 0
                     game_speed = 6
+                    airborne_counter = 0
                     waiting = False
 
     # --- Score ---
